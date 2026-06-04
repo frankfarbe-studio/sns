@@ -13,9 +13,11 @@ document.addEventListener('DOMContentLoaded', () => {
   // --- State ---
   let comments = [];
   let likedIds = loadLikedIds(); // 내가 누른 좋아요 (기기별, localStorage)
+  let adminSecret = localStorage.getItem('adminSecret') || null; // 관리자 비밀번호 (소유자 기기에만)
 
   // --- DOM Elements ---
   const themeToggle = document.getElementById('theme-toggle');
+  const adminToggle = document.getElementById('admin-toggle');
   const commentCountEl = document.getElementById('comment-count');
   const commentForm = document.getElementById('comment-form');
   const authorInput = document.getElementById('comment-author');
@@ -28,6 +30,7 @@ document.addEventListener('DOMContentLoaded', () => {
   async function init() {
     loadTheme();
     setupEventListeners();
+    updateAdminUI();
     if (!sb) {
       showFatal('Supabase 설정이 필요합니다. supabase-config.js의 url/anonKey를 채워주세요.');
       return;
@@ -177,6 +180,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <i class="fa-regular fa-comment"></i> 답글
           </button>
         </div>
+        ${adminSecret ? `<button class="del-btn" data-action="del-comment" data-id="${comment.id}" title="삭제"><i class="fa-solid fa-trash"></i></button>` : ''}
       </div>
       <div class="replies-container" id="replies-container-${comment.id}"></div>
     `;
@@ -208,6 +212,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <span class="comment-time" data-timestamp="${ts}">${timeAgo(ts)}</span>
           </div>
         </div>
+        ${adminSecret ? `<button class="del-btn" data-action="del-reply" data-id="${reply.id}" data-parent-id="${parentId}" title="삭제"><i class="fa-solid fa-trash"></i></button>` : ''}
       </div>
       <div class="comment-body" style="font-size: 0.88rem; color: var(--text-main);">${escapeHTML(reply.content)}</div>
     `;
@@ -290,6 +295,66 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  // --- Admin mode (소유자 전용 삭제) ---
+  function updateAdminUI() {
+    if (!adminToggle) return;
+    const on = !!adminSecret;
+    adminToggle.classList.toggle('active', on);
+    adminToggle.title = on ? '관리자 모드 켜짐 (클릭해서 해제)' : '관리자 모드';
+    const icon = adminToggle.querySelector('i');
+    if (icon) icon.className = on ? 'fa-solid fa-lock-open' : 'fa-solid fa-lock';
+  }
+
+  async function toggleAdmin() {
+    if (adminSecret) {
+      adminSecret = null;
+      localStorage.removeItem('adminSecret');
+      updateAdminUI();
+      renderComments();
+      return;
+    }
+    const pw = prompt('관리자 비밀번호를 입력하세요');
+    if (!pw) return;
+    const { data, error } = await sb.rpc('verify_admin', { admin_secret: pw });
+    if (error) {
+      alert('확인 실패: ' + error.message);
+      return;
+    }
+    if (data === true) {
+      adminSecret = pw;
+      localStorage.setItem('adminSecret', pw);
+      updateAdminUI();
+      renderComments();
+    } else {
+      alert('비밀번호가 올바르지 않습니다.');
+    }
+  }
+
+  async function handleDeleteComment(id) {
+    if (!adminSecret) return;
+    if (!confirm('이 댓글을 삭제할까요? (달린 답글도 함께 삭제됩니다)')) return;
+    const { data, error } = await sb.rpc('delete_comment', { row_id: id, admin_secret: adminSecret });
+    if (error || data !== true) {
+      alert('삭제 실패' + (error ? ': ' + error.message : ' (권한 없음)'));
+      return;
+    }
+    comments = comments.filter(c => c.id !== id);
+    renderComments();
+  }
+
+  async function handleDeleteReply(parentId, replyId) {
+    if (!adminSecret) return;
+    if (!confirm('이 답글을 삭제할까요?')) return;
+    const { data, error } = await sb.rpc('delete_reply', { row_id: replyId, admin_secret: adminSecret });
+    if (error || data !== true) {
+      alert('삭제 실패' + (error ? ': ' + error.message : ' (권한 없음)'));
+      return;
+    }
+    const parent = comments.find(c => c.id === parentId);
+    if (parent && parent.replies) parent.replies = parent.replies.filter(r => r.id !== replyId);
+    renderComments();
+  }
+
   // --- Replies ---
   function handleToggleReplyBox(btn, commentId) {
     const container = document.getElementById(`replies-container-${commentId}`);
@@ -360,6 +425,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // --- Event Listeners Setup ---
   function setupEventListeners() {
     themeToggle.addEventListener('click', toggleTheme);
+    if (adminToggle) adminToggle.addEventListener('click', toggleAdmin);
     commentForm.addEventListener('submit', handleCommentSubmit);
 
     contentInput.addEventListener('input', () => {
@@ -378,6 +444,18 @@ document.addEventListener('DOMContentLoaded', () => {
       const replyToggleBtn = target.closest('.reply-toggle-btn');
       if (replyToggleBtn && replyToggleBtn.dataset.action === 'toggle-reply-box') {
         handleToggleReplyBox(replyToggleBtn, replyToggleBtn.dataset.id);
+        return;
+      }
+
+      const delCommentBtn = target.closest('[data-action="del-comment"]');
+      if (delCommentBtn) {
+        handleDeleteComment(delCommentBtn.dataset.id);
+        return;
+      }
+
+      const delReplyBtn = target.closest('[data-action="del-reply"]');
+      if (delReplyBtn) {
+        handleDeleteReply(delReplyBtn.dataset.parentId, delReplyBtn.dataset.id);
         return;
       }
     });

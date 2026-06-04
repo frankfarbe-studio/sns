@@ -7,7 +7,7 @@
   <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
   <!-- FontAwesome Icons -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <!-- Stylesheet -->
@@ -28,6 +28,9 @@
         <h1>실시간 댓글 피드</h1>
       </div>
       <div class="header-right">
+        <button id="admin-toggle" class="icon-btn" aria-label="관리자 모드" title="관리자 모드">
+          <i class="fa-solid fa-lock"></i>
+        </button>
         <button id="theme-toggle" class="icon-btn" aria-label="테마 전환">
           <i class="fa-solid fa-sun theme-sun-icon"></i>
           <i class="fa-solid fa-moon theme-moon-icon"></i>
@@ -37,6 +40,17 @@
 
     <!-- Main Content -->
     <main class="app-main">
+      <!-- Soundtrack (Spotify) -->
+      <section class="media-card">
+        <iframe
+          title="playlist"
+          style="border-radius:12px"
+          src="https://open.spotify.com/embed/playlist/0QlEc7xCZ4Es9HvNvjT15v?utm_source=generator&theme=0"
+          width="100%" height="152" frameborder="0"
+          allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+          loading="lazy"></iframe>
+      </section>
+
       <!-- Comment Stats -->
       <section class="comment-stats">
         <span class="stats-text">전체 댓글 <strong id="comment-count">0</strong>개</span>

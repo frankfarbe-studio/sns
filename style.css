@@ -3,12 +3,13 @@
 /* --- Design System Tokens --- */
 :root {
   /* Fonts */
-  --font-main: 'Inter', 'Noto Sans KR', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  
-  /* Shared Colors */
-  --color-primary: #6366f1;
-  --color-primary-hover: #4f46e5;
-  --color-primary-light: rgba(99, 102, 241, 0.1);
+  --font-main: 'Space Mono', 'Noto Sans KR', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+
+  /* Shared Colors — 단일 네온 액센트 (테크노 미니멀) */
+  --color-primary: #34f5c5;
+  --color-primary-hover: #19d6a8;
+  --color-primary-light: rgba(52, 245, 197, 0.12);
+  --on-accent: #04110d;
   --color-danger: #ef4444;
   --color-danger-hover: #dc2626;
   --color-danger-light: rgba(239, 68, 68, 0.1);
@@ -28,34 +29,34 @@
 
 /* --- Dark Theme Variables --- */
 [data-theme="dark"] {
-  --bg-app: #0b0f19;
-  --bg-gradient: linear-gradient(135deg, #0b0f19 0%, #111827 100%);
-  --bg-card: rgba(22, 28, 45, 0.7);
-  --bg-input: rgba(17, 24, 39, 0.6);
-  --border-color: rgba(255, 255, 255, 0.08);
-  --text-main: #f3f4f6;
-  --text-muted: #9ca3af;
-  --text-light: #6b7280;
-  --glass-blur: blur(16px);
-  --modal-bg: rgba(17, 24, 39, 0.95);
-  --reply-bg: rgba(31, 41, 55, 0.3);
-  --input-focus-shadow: 0 0 0 3px rgba(99, 102, 241, 0.3);
+  --bg-app: #060608;
+  --bg-gradient: radial-gradient(1100px 560px at 50% -12%, rgba(52, 245, 197, 0.07), transparent 60%);
+  --bg-card: rgba(255, 255, 255, 0.025);
+  --bg-input: rgba(255, 255, 255, 0.035);
+  --border-color: rgba(255, 255, 255, 0.10);
+  --text-main: #e9e9ee;
+  --text-muted: #9396a1;
+  --text-light: #5b5e6b;
+  --glass-blur: blur(10px);
+  --modal-bg: rgba(10, 10, 12, 0.96);
+  --reply-bg: rgba(255, 255, 255, 0.02);
+  --input-focus-shadow: 0 0 0 3px rgba(52, 245, 197, 0.25);
 }
 
 /* --- Light Theme Variables --- */
 [data-theme="light"] {
-  --bg-app: #f8fafc;
-  --bg-gradient: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-  --bg-card: rgba(255, 255, 255, 0.75);
-  --bg-input: rgba(248, 250, 252, 0.9);
-  --border-color: rgba(0, 0, 0, 0.06);
-  --text-main: #0f172a;
-  --text-muted: #475569;
-  --text-light: #94a3b8;
-  --glass-blur: blur(12px);
-  --modal-bg: rgba(255, 255, 255, 0.95);
-  --reply-bg: rgba(241, 255, 249, 0.5);
-  --input-focus-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+  --bg-app: #f3f4f5;
+  --bg-gradient: radial-gradient(1100px 560px at 50% -12%, rgba(20, 214, 168, 0.12), transparent 60%);
+  --bg-card: rgba(255, 255, 255, 0.85);
+  --bg-input: rgba(0, 0, 0, 0.03);
+  --border-color: rgba(0, 0, 0, 0.12);
+  --text-main: #0b0b0d;
+  --text-muted: #52555f;
+  --text-light: #8a8d97;
+  --glass-blur: blur(8px);
+  --modal-bg: rgba(255, 255, 255, 0.97);
+  --reply-bg: rgba(0, 0, 0, 0.02);
+  --input-focus-shadow: 0 0 0 3px rgba(20, 214, 168, 0.2);
 }
 
 /* --- Reset & Base --- */
@@ -68,7 +69,12 @@
 body {
   font-family: var(--font-main);
   background: var(--bg-app);
-  background-image: var(--bg-gradient);
+  background-image:
+    var(--bg-gradient),
+    linear-gradient(rgba(255, 255, 255, 0.022) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.022) 1px, transparent 1px);
+  background-size: auto, 38px 38px, 38px 38px;
+  background-attachment: fixed;
   color: var(--text-main);
   min-height: 100vh;
   display: flex;
@@ -111,14 +117,16 @@ body {
 }
 
 .logo-icon {
-  font-size: 1.5rem;
+  font-size: 1.4rem;
   color: var(--color-primary);
+  filter: drop-shadow(0 0 6px rgba(52, 245, 197, 0.5));
 }
 
 .app-header h1 {
-  font-size: 1.25rem;
+  font-size: 1.02rem;
   font-weight: 700;
-  letter-spacing: -0.025em;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
 }
 
 /* --- Theme Toggle & Buttons --- */
@@ -277,12 +285,14 @@ body {
 
 .submit-btn {
   background: var(--color-primary);
-  color: white;
+  color: var(--on-accent);
   border: none;
   border-radius: 8px;
   padding: 0.75rem 1.5rem;
-  font-size: 0.95rem;
-  font-weight: 600;
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -294,7 +304,7 @@ body {
 .submit-btn:hover {
   background: var(--color-primary-hover);
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+  box-shadow: 0 4px 18px rgba(52, 245, 197, 0.35);
 }
 
 .submit-btn:active {
@@ -383,8 +393,8 @@ body {
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--color-primary) 0%, #a78bfa 100%);
-  color: white;
+  background: linear-gradient(135deg, var(--color-primary) 0%, #1ea0ff 100%);
+  color: var(--on-accent);
   font-size: 0.95rem;
   font-weight: 700;
   display: flex;
@@ -613,7 +623,7 @@ body {
 
 .btn-primary {
   background: var(--color-primary);
-  color: white;
+  color: var(--on-accent);
 }
 
 .btn-primary:hover {
@@ -751,4 +761,54 @@ body {
 
 .text-warning {
   color: var(--color-warning);
+}
+
+/* --- Soundtrack (Spotify) card --- */
+.media-card {
+  background: var(--bg-card);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  padding: 0.6rem;
+  box-shadow: var(--shadow-md);
+}
+
+.media-card iframe {
+  display: block;
+  width: 100%;
+}
+
+/* --- Admin mode toggle (active) --- */
+.icon-btn.active {
+  background: var(--color-primary-light);
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 10px rgba(52, 245, 197, 0.35);
+}
+
+/* --- Delete button (관리자 전용) --- */
+.del-btn {
+  background: none;
+  border: 1px solid transparent;
+  color: var(--text-light);
+  cursor: pointer;
+  font-size: 0.78rem;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  transition: all var(--transition-fast);
+}
+
+.del-btn:hover {
+  color: var(--color-danger);
+  background: var(--color-danger-light);
+  border-color: rgba(239, 68, 68, 0.25);
+}
+
+.reply-card .comment-header {
+  align-items: flex-start;
 }
