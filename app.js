@@ -1,11 +1,18 @@
 /**
- * 한줄 댓글 피드 - Frontend Logic
+ * 한줄 댓글 피드 - Frontend Logic (Supabase 연동)
  */
 
 document.addEventListener('DOMContentLoaded', () => {
+  // --- Supabase client ---
+  const cfg = window.SUPABASE_CONFIG || {};
+  let sb = null;
+  if (window.supabase && cfg.url && !cfg.url.startsWith('PASTE_')) {
+    sb = window.supabase.createClient(cfg.url, cfg.anonKey);
+  }
+
   // --- State ---
   let comments = [];
-  let likedIds = [];
+  let likedIds = loadLikedIds(); // 내가 누른 좋아요 (기기별, localStorage)
 
   // --- DOM Elements ---
   const themeToggle = document.getElementById('theme-toggle');
@@ -18,15 +25,18 @@ document.addEventListener('DOMContentLoaded', () => {
   const emptyState = document.getElementById('empty-state');
 
   // --- Initializer ---
-  function init() {
+  async function init() {
     loadTheme();
-    renderComments();
     setupEventListeners();
+    if (!sb) {
+      showFatal('Supabase 설정이 필요합니다. supabase-config.js의 url/anonKey를 채워주세요.');
+      return;
+    }
+    await loadComments();
   }
 
   // --- Theme Management ---
   function loadTheme() {
-    // Default to system preference or dark mode
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
     document.documentElement.setAttribute('data-theme', prefersDark ? 'dark' : 'light');
   }
@@ -35,6 +45,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const currentTheme = document.documentElement.getAttribute('data-theme');
     const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
     document.documentElement.setAttribute('data-theme', newTheme);
+  }
+
+  // --- localStorage: 내 좋아요 기록 ---
+  function loadLikedIds() {
+    try {
+      return JSON.parse(localStorage.getItem('likedIds') || '[]');
+    } catch {
+      return [];
+    }
+  }
+  function saveLikedIds() {
+    localStorage.setItem('likedIds', JSON.stringify(likedIds));
   }
 
   // --- Helper Functions ---
@@ -53,10 +75,15 @@ document.addEventListener('DOMContentLoaded', () => {
     return name.trim().charAt(0);
   }
 
+  // created_at(ISO 문자열) → ms
+  function toMs(createdAt) {
+    return new Date(createdAt).getTime();
+  }
+
   function timeAgo(timestamp) {
     const now = Date.now();
     const diff = now - timestamp;
-    
+
     const minutes = Math.floor(diff / 60000);
     const hours = Math.floor(diff / 3600000);
     const days = Math.floor(diff / 86400000);
@@ -65,18 +92,38 @@ document.addEventListener('DOMContentLoaded', () => {
     if (minutes < 60) return `${minutes}분 전`;
     if (hours < 24) return `${hours}시간 전`;
     if (days < 30) return `${days}일 전`;
-    
+
     const date = new Date(timestamp);
     return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')}`;
+  }
+
+  function showFatal(msg) {
+    emptyState.style.display = 'flex';
+    emptyState.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i><p>${escapeHTML(msg)}</p>`;
+  }
+
+  // --- Data layer (Supabase) ---
+  async function loadComments() {
+    // 댓글 + 답글을 한 번에 (FK 임베드). 답글은 오래된 순.
+    const { data, error } = await sb
+      .from('comments')
+      .select('*, replies(*)')
+      .order('created_at', { ascending: false })
+      .order('created_at', { foreignTable: 'replies', ascending: true });
+
+    if (error) {
+      showFatal('댓글을 불러오지 못했습니다: ' + error.message);
+      return;
+    }
+    comments = data || [];
+    renderComments();
   }
 
   // --- Render logic ---
   function updateCount() {
     let totalCount = comments.length;
     comments.forEach(comment => {
-      if (comment.replies) {
-        totalCount += comment.replies.length;
-      }
+      if (comment.replies) totalCount += comment.replies.length;
     });
     commentCountEl.textContent = totalCount;
   }
@@ -91,7 +138,6 @@ document.addEventListener('DOMContentLoaded', () => {
       emptyState.style.display = 'flex';
       return;
     }
-
     emptyState.style.display = 'none';
 
     comments.forEach(comment => {
@@ -105,6 +151,7 @@ document.addEventListener('DOMContentLoaded', () => {
     card.className = 'comment-card';
     card.dataset.id = comment.id;
 
+    const ts = toMs(comment.created_at);
     const isLiked = likedIds.includes(comment.id);
     const likedClass = isLiked ? 'liked' : '';
     const avatarLetter = escapeHTML(getAvatarLetter(comment.author));
@@ -115,7 +162,7 @@ document.addEventListener('DOMContentLoaded', () => {
           <div class="comment-avatar">${avatarLetter}</div>
           <div class="comment-info">
             <span class="comment-author-name">${escapeHTML(comment.author)}</span>
-            <span class="comment-time" data-timestamp="${comment.timestamp}">${timeAgo(comment.timestamp)}</span>
+            <span class="comment-time" data-timestamp="${ts}">${timeAgo(ts)}</span>
           </div>
         </div>
       </div>
@@ -131,19 +178,15 @@ document.addEventListener('DOMContentLoaded', () => {
           </button>
         </div>
       </div>
-      <!-- Replies Section Container -->
       <div class="replies-container" id="replies-container-${comment.id}"></div>
     `;
 
-    // Render existing replies
     const repliesContainer = card.querySelector(`#replies-container-${comment.id}`);
     if (comment.replies && comment.replies.length > 0) {
       comment.replies.forEach(reply => {
-        const replyEl = createReplyCardElement(reply, comment.id);
-        repliesContainer.appendChild(replyEl);
+        repliesContainer.appendChild(createReplyCardElement(reply, comment.id));
       });
     }
-
     return card;
   }
 
@@ -153,6 +196,7 @@ document.addEventListener('DOMContentLoaded', () => {
     replyCard.dataset.id = reply.id;
     replyCard.dataset.parentId = parentId;
 
+    const ts = toMs(reply.created_at);
     const avatarLetter = escapeHTML(getAvatarLetter(reply.author));
 
     replyCard.innerHTML = `
@@ -161,91 +205,102 @@ document.addEventListener('DOMContentLoaded', () => {
           <div class="comment-avatar" style="width: 28px; height: 28px; font-size: 0.8rem; background: linear-gradient(135deg, #10b981 0%, #3b82f6 100%)">${avatarLetter}</div>
           <div class="comment-info">
             <span class="comment-author-name" style="font-size: 0.85rem;">${escapeHTML(reply.author)}</span>
-            <span class="comment-time" data-timestamp="${reply.timestamp}">${timeAgo(reply.timestamp)}</span>
+            <span class="comment-time" data-timestamp="${ts}">${timeAgo(ts)}</span>
           </div>
         </div>
       </div>
       <div class="comment-body" style="font-size: 0.88rem; color: var(--text-main);">${escapeHTML(reply.content)}</div>
     `;
-
     return replyCard;
   }
 
-  // --- DOM Manipulation Actions ---
-  function handleCommentSubmit(e) {
+  // --- Actions ---
+  async function handleCommentSubmit(e) {
     e.preventDefault();
     const author = authorInput.value.trim();
     const content = contentInput.value.trim();
-
     if (!author || !content) return;
 
-    const newComment = {
-      id: 'c_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
-      author: author,
-      content: content,
-      timestamp: Date.now(),
-      likes: 0,
-      replies: []
-    };
+    const submitBtn = commentForm.querySelector('.submit-btn');
+    submitBtn.disabled = true;
 
-    comments.unshift(newComment);
+    const { data, error } = await sb
+      .from('comments')
+      .insert({ author, content })
+      .select('*, replies(*)')
+      .single();
+
+    submitBtn.disabled = false;
+
+    if (error) {
+      alert('댓글 등록 실패: ' + error.message);
+      return;
+    }
+
+    comments.unshift(data);
     renderComments();
 
-    // Reset inputs
     authorInput.value = '';
     contentInput.value = '';
     charCountEl.textContent = '0';
 
-    // Highlight newly added comment
-    const newCard = commentList.querySelector(`[data-id="${newComment.id}"]`);
+    const newCard = commentList.querySelector(`[data-id="${data.id}"]`);
     if (newCard) {
       newCard.classList.add('newly-added');
-      setTimeout(() => {
-        newCard.classList.remove('newly-added');
-      }, 2000);
+      setTimeout(() => newCard.classList.remove('newly-added'), 2000);
       newCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
   }
 
-  // --- Likes Flow ---
-  function handleLike(btn, id) {
+  // --- Likes ---
+  async function handleLike(btn, id) {
     const comment = comments.find(c => c.id === id);
     if (!comment) return;
 
     const likeCountSpan = btn.querySelector('.like-count');
     const heartIcon = btn.querySelector('i');
-    
     const index = likedIds.indexOf(id);
-    if (index === -1) {
-      // Like it
+    const liking = index === -1;
+
+    // 낙관적 UI 업데이트
+    if (liking) {
       likedIds.push(id);
       comment.likes = (comment.likes || 0) + 1;
       btn.classList.add('liked');
       heartIcon.className = 'fa-solid fa-heart';
     } else {
-      // Unlike it
       likedIds.splice(index, 1);
       comment.likes = Math.max(0, (comment.likes || 1) - 1);
       btn.classList.remove('liked');
       heartIcon.className = 'fa-regular fa-heart';
     }
-
     likeCountSpan.textContent = comment.likes;
+    saveLikedIds();
+
+    const fn = liking ? 'increment_likes' : 'decrement_likes';
+    const { data, error } = await sb.rpc(fn, { row_id: id });
+    if (error) {
+      // 실패 시 서버 값 기준으로 되돌림은 생략하되, 콘솔에 기록
+      console.error('like RPC failed:', error.message);
+      return;
+    }
+    if (typeof data === 'number') {
+      comment.likes = data;
+      likeCountSpan.textContent = data;
+    }
   }
 
-  // --- Replies Flow ---
+  // --- Replies ---
   function handleToggleReplyBox(btn, commentId) {
     const container = document.getElementById(`replies-container-${commentId}`);
     if (!container) return;
 
-    // Check if reply form is already open
     const existingForm = container.querySelector('.reply-write-box');
     if (existingForm) {
       existingForm.remove();
       return;
     }
 
-    // Create Reply Form
     const replyForm = document.createElement('div');
     replyForm.className = 'reply-write-box';
     replyForm.innerHTML = `
@@ -259,23 +314,22 @@ document.addEventListener('DOMContentLoaded', () => {
       </div>
     `;
 
-    // Event handlers inside form
     const cancelBtn = replyForm.querySelector('.cancel-reply-btn');
     const submitBtn = replyForm.querySelector('.submit-reply-btn');
     const rAuthor = replyForm.querySelector('.reply-author-input');
     const rContent = replyForm.querySelector('.reply-content-input');
 
     cancelBtn.addEventListener('click', () => replyForm.remove());
-    submitBtn.addEventListener('click', () => {
+    submitBtn.addEventListener('click', async () => {
       const author = rAuthor.value.trim();
       const content = rContent.value.trim();
-
       if (!author || !content) {
         alert('모든 항목을 입력해주세요.');
         return;
       }
-
-      submitReply(commentId, author, content);
+      submitBtn.disabled = true;
+      await submitReply(commentId, author, content);
+      submitBtn.disabled = false;
       replyForm.remove();
     });
 
@@ -283,68 +337,58 @@ document.addEventListener('DOMContentLoaded', () => {
     rAuthor.focus();
   }
 
-  function submitReply(parentId, author, content) {
+  async function submitReply(parentId, author, content) {
     const parentComment = comments.find(c => c.id === parentId);
     if (!parentComment) return;
 
-    const newReply = {
-      id: 'r_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
-      author: author,
-      content: content,
-      timestamp: Date.now()
-    };
+    const { data, error } = await sb
+      .from('replies')
+      .insert({ comment_id: parentId, author, content })
+      .select('*')
+      .single();
+
+    if (error) {
+      alert('답글 등록 실패: ' + error.message);
+      return;
+    }
 
     if (!parentComment.replies) parentComment.replies = [];
-    parentComment.replies.push(newReply);
+    parentComment.replies.push(data);
     renderComments();
   }
 
   // --- Event Listeners Setup ---
   function setupEventListeners() {
-    // Theme toggle
     themeToggle.addEventListener('click', toggleTheme);
-
-    // Comment submission
     commentForm.addEventListener('submit', handleCommentSubmit);
 
-    // Character counter
     contentInput.addEventListener('input', () => {
       charCountEl.textContent = contentInput.value.length;
     });
 
-    // Event delegation on comment list
     commentList.addEventListener('click', (e) => {
       const target = e.target;
 
-      // Liking a comment
       const likeBtn = target.closest('.like-btn');
       if (likeBtn && likeBtn.dataset.action === 'like') {
-        const id = likeBtn.dataset.id;
-        handleLike(likeBtn, id);
+        handleLike(likeBtn, likeBtn.dataset.id);
         return;
       }
 
-      // Replying trigger
       const replyToggleBtn = target.closest('.reply-toggle-btn');
       if (replyToggleBtn && replyToggleBtn.dataset.action === 'toggle-reply-box') {
-        const id = replyToggleBtn.dataset.id;
-        handleToggleReplyBox(replyToggleBtn, id);
+        handleToggleReplyBox(replyToggleBtn, replyToggleBtn.dataset.id);
         return;
       }
     });
 
-    // Update times every minute dynamically
     setInterval(() => {
-      const timeElements = document.querySelectorAll('.comment-time');
-      timeElements.forEach(el => {
+      document.querySelectorAll('.comment-time').forEach(el => {
         const timestamp = parseInt(el.getAttribute('data-timestamp'));
-        if (timestamp) {
-          el.textContent = timeAgo(timestamp);
-        }
+        if (timestamp) el.textContent = timeAgo(timestamp);
       });
     }, 60000);
   }
 
-  // Run initial loading
   init();
 });
